@@ -12,7 +12,7 @@
 #include <kern/kdebug.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
-
+int console_color;
 
 struct Command {
 	const char *name;
@@ -24,10 +24,30 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{ "backtrace", "", mon_backtrace}
+	{ "backtrace", "", mon_backtrace},
+	{ "color", "", set_color}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
+
+int getNum(char c) {
+	if('0'<=c&&c<='9') return c-'0';
+	if('a'<=c&&c<='f') return c-'a';
+	if('A'<=c&&c<='F') return c-'A';
+	return -1;
+}
+
+int
+set_color(int argc, char **argv, struct Trapframe *tf) {
+	console_color=0;
+	if(argv[1][2]) return -1;
+	for(int i=0;argv[1][i];i++) {
+		int num=getNum(argv[1][i]);
+		if(num<0) return -1;
+		console_color=console_color*16+num;
+	}
+	return 0;
+}
 
 int
 mon_help(int argc, char **argv, struct Trapframe *tf)
