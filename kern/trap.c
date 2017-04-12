@@ -65,14 +65,44 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
-
+extern void f0();
+extern void f1();
+extern void f3();
+extern void f4();
+extern void f5();
+extern void f6();
+extern void f7();
+extern void f8();
+extern void f9();
+extern void f10();
+extern void f11();
+extern void f12();
+extern void f13();
+extern void f14();
+extern void f16();
+extern void f48();
 void
 trap_init(void)
 {
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
-
+	SETGATE(idt[0],0,GD_KT,f0,0);
+	SETGATE(idt[1],0,GD_KT,f1,0);
+	SETGATE(idt[3],0,GD_KT,f3,3);
+	SETGATE(idt[4],0,GD_KT,f4,0);
+	SETGATE(idt[5],0,GD_KT,f5,0);
+	SETGATE(idt[6],0,GD_KT,f6,0);
+	SETGATE(idt[7],0,GD_KT,f7,0);
+	SETGATE(idt[8],0,GD_KT,f8,0);
+	SETGATE(idt[9],0,GD_KT,f9,0);
+	SETGATE(idt[10],0,GD_KT,f10,0);
+	SETGATE(idt[11],0,GD_KT,f11,0);
+	SETGATE(idt[12],0,GD_KT,f12,0);
+	SETGATE(idt[13],0,GD_KT,f13,0);
+	SETGATE(idt[14],0,GD_KT,f14,0);
+	SETGATE(idt[16],0,GD_KT,f16,0);
+	SETGATE(idt[48],0,GD_KT,f48,3);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -174,7 +204,23 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-
+	if(tf->tf_trapno == 14) {
+		page_fault_handler(tf);
+		return;
+	}
+	if(tf->tf_trapno == 3) {
+		monitor(tf);
+		return;
+	}
+	if(tf->tf_trapno == 48) {
+		tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax,
+						tf->tf_regs.reg_edx,
+						tf->tf_regs.reg_ecx,
+						tf->tf_regs.reg_ebx,
+						tf->tf_regs.reg_edi,
+						tf->tf_regs.reg_esi);
+		return;
+	}
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
 	// IRQ line or other reasons. We don't care.
@@ -187,6 +233,7 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
+
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
@@ -269,7 +316,8 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
-
+	if((tf->tf_cs&3)==0) panic("Page faults in kernel mode");
+	
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
