@@ -144,8 +144,6 @@ mem_init(void)
 
 	// Permissions: kernel R, user R
 	kern_pgdir[PDX(UVPT)] = PADDR(kern_pgdir) | PTE_U | PTE_P;
-	cprintf("----------0x%x\n",kern_pgdir);
-	cprintf("----------0x%x\n",PADDR(kern_pgdir));
 	//////////////////////////////////////////////////////////////////////
 	// Allocate an array of npages 'struct PageInfo's and store it in 'pages'.
 	// The kernel uses this array to keep track of physical pages: for
@@ -154,7 +152,6 @@ mem_init(void)
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
 	pages=boot_alloc(npages*sizeof(struct PageInfo));
-	cprintf("0x%x\n",pages);
 	memset(pages, 0, npages*sizeof(struct PageInfo));
 
 	//////////////////////////////////////////////////////////////////////
@@ -202,7 +199,6 @@ mem_init(void)
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
-	cprintf("OK\n");
 	boot_map_region(kern_pgdir,KSTACKTOP-KSTKSIZE,KSTKSIZE,PADDR(bootstack),PTE_W);
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -219,7 +215,6 @@ mem_init(void)
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
-
 	// Switch from the minimal entry page directory to the full kern_pgdir
 	// page table we just created.	Our instruction pointer should be
 	// somewhere between KERNBASE and KERNBASE+4MB right now, which is
@@ -264,6 +259,13 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	for(int i=0; i<NCPU; i++) {
+		boot_map_region(kern_pgdir,
+				KSTACKTOP-i*(KSTKSIZE+KSTKGAP)-KSTKSIZE,
+				KSTKSIZE,
+				PADDR(percpu_kstacks[i]),
+				PTE_W);
+	}
 
 }
 
@@ -305,7 +307,7 @@ page_init(void)
 	// free pages!
 	size_t i;
 	for (i = 1; i < npages; i++) {
-		if(i<PGNUM(IOPHYSMEM)||i>PGNUM(PADDR(ROUNDUP(boot_alloc(0),PGSIZE)))) {
+		if((i<PGNUM(IOPHYSMEM)||i>PGNUM(PADDR(ROUNDUP(boot_alloc(0),PGSIZE))))&&i!=PGNUM(MPENTRY_PADDR)) {
 			pages[i].pp_ref = 0;
 			pages[i].pp_link = page_free_list;
 			page_free_list = &pages[i];
@@ -416,7 +418,6 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	uintptr_t va_up=va+size;
-	cprintf("0x%x,%d,0x%x\n",va,size,va_up);
 	for(;va!=va_up;va+=PGSIZE,pa+=PGSIZE) {
 		pte_t* tmp=pgdir_walk(pgdir, (void*)va, 1);
 		*tmp = pa|perm|PTE_P;
@@ -555,6 +556,16 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
+	physaddr_t down = ROUNDDOWN(pa, PGSIZE);
+	physaddr_t up = ROUNDUP(pa+size, PGSIZE);
+	size = up - down;
+	boot_map_region(kern_pgdir,
+			base,
+			size,
+			down,
+			PTE_PCD|PTE_PWT|PTE_W);
+	base = base + size;
+	return (void*)(base - size);
 	panic("mmio_map_region not implemented");
 }
 
