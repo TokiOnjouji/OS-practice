@@ -80,6 +80,22 @@ extern void f12();
 extern void f13();
 extern void f14();
 extern void f16();
+extern void f32();
+extern void f33();
+extern void f34();
+extern void f35();
+extern void f36();
+extern void f37();
+extern void f38();
+extern void f39();
+extern void f40();
+extern void f41();
+extern void f42();
+extern void f43();
+extern void f44();
+extern void f45();
+extern void f46();
+extern void f47();
 extern void f48();
 void
 trap_init(void)
@@ -102,6 +118,22 @@ trap_init(void)
 	SETGATE(idt[13],0,GD_KT,f13,0);
 	SETGATE(idt[14],0,GD_KT,f14,0);
 	SETGATE(idt[16],0,GD_KT,f16,0);
+	SETGATE(idt[32],0,GD_KT,f32,0);
+	SETGATE(idt[33],0,GD_KT,f33,0);
+	SETGATE(idt[34],0,GD_KT,f34,0);
+	SETGATE(idt[35],0,GD_KT,f35,0);
+	SETGATE(idt[36],0,GD_KT,f36,0);
+	SETGATE(idt[37],0,GD_KT,f37,0);
+	SETGATE(idt[38],0,GD_KT,f38,0);
+	SETGATE(idt[39],0,GD_KT,f39,0);
+	SETGATE(idt[40],0,GD_KT,f40,0);
+	SETGATE(idt[41],0,GD_KT,f41,0);
+	SETGATE(idt[42],0,GD_KT,f42,0);
+	SETGATE(idt[43],0,GD_KT,f43,0);
+	SETGATE(idt[44],0,GD_KT,f44,0);
+	SETGATE(idt[45],0,GD_KT,f45,0);
+	SETGATE(idt[46],0,GD_KT,f46,0);
+	SETGATE(idt[47],0,GD_KT,f47,0);
 	SETGATE(idt[48],0,GD_KT,f48,3);
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -136,7 +168,7 @@ trap_init_percpu(void)
 	int i = cpunum();
 	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP-i*(KSTKSIZE+KSTKGAP);
 	thiscpu->cpu_ts.ts_ss0 = GD_KD;
-	thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate);
+	//thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate);
 
 	gdt[(GD_TSS0 >> 3) + i] = SEG16(STS_T32A, (uint32_t) (&thiscpu->cpu_ts),
 					sizeof(struct Taskstate) - 1, 0);
@@ -225,6 +257,11 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
+	if(tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER) {
+		lapic_eoi();
+		sched_yield();
+		return;	
+	}
 
 
 	// Unexpected trap: The user process or the kernel has a bug.
@@ -343,7 +380,27 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
+	if(curenv->env_pgfault_upcall) {
+		struct UTrapframe* utf;
+		if(UXSTACKTOP-PGSIZE <= tf->tf_esp && tf->tf_esp < UXSTACKTOP) {
+			utf = (struct UTrapframe*)(tf->tf_esp - sizeof(struct UTrapframe) - 4);
+		}
+		else
+			utf = (struct UTrapframe*)(UXSTACKTOP - sizeof(struct UTrapframe));
+		user_mem_assert(curenv, (void*)utf, sizeof(struct UTrapframe), PTE_U);
 
+		utf->utf_fault_va = fault_va;
+		utf->utf_err = tf->tf_err;
+		utf->utf_regs = tf->tf_regs;
+		utf->utf_eip = tf->tf_eip;
+		utf->utf_eflags = tf->tf_eflags;
+		utf->utf_esp = tf->tf_esp;
+
+		tf->tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+		tf->tf_esp = (uintptr_t)utf;
+
+		env_run(curenv);
+	}
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);

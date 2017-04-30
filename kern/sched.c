@@ -41,8 +41,8 @@ sched_yield(void)
 		if(idle == envs + NENV)
 			idle = envs;
 	}
-	if(idle->env_status == ENV_RUNNING) {
-		env_run(idle);
+	if(curenv && curenv->env_status == ENV_RUNNING) {
+		env_run(curenv);
 		return;
 	}
 	// sched_halt never returns
