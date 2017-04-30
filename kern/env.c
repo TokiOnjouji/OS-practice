@@ -123,6 +123,7 @@ env_init(void)
 		envs[i].env_id=0;
 		envs[i].env_link=env_free_list;
 		env_free_list=&envs[i];
+		envs[i].env_status=ENV_FREE;
 	}
 	// Per-CPU part of the initialization
 	env_init_percpu();
@@ -472,6 +473,7 @@ env_pop_tf(struct Trapframe *tf)
 {
 	// Record the CPU we are running on for user-space debugging
 	curenv->env_cpunum = cpunum();
+	unlock_kernel();
 
 	asm volatile(
 		"\tmovl %0,%%esp\n"
@@ -517,7 +519,6 @@ env_run(struct Env *e)
 	e->env_status=ENV_RUNNING;
 	e->env_runs++;
 	lcr3(PADDR(curenv->env_pgdir));
-	unlock_kernel();
 	env_pop_tf(&e->env_tf);
 	panic("env_run not yet implemented");
 }
