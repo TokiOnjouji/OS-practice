@@ -66,6 +66,11 @@ duppage(envid_t envid, unsigned pn)
 
 	// LAB 4: Your code here.
 	void* addr = (void*)(pn*PGSIZE);
+	if(uvpt[pn]&PTE_SHARE) {
+		if((r=sys_page_map(0, addr, envid, addr, uvpt[pn]&PTE_SYSCALL)) < 0)
+			return r;
+		return 0;	
+	}
 	if(uvpt[pn]&PTE_W || uvpt[pn]&PTE_COW) {
 		if ((r=sys_page_map(0, addr, envid, addr, PTE_COW|PTE_U|PTE_P)) < 0)
 			return r;
@@ -109,7 +114,7 @@ fork(void)
 		return envid;	
 	}
 	for(int i = 0; i < USTACKTOP/PGSIZE; i++)
-		if((uvpd[PDX(i*PGSIZE)]&PTE_P) && (uvpt[i]&PTE_P) && (uvpt[i]&PTE_U))
+		if((uvpd[PDX(i*PGSIZE)]&PTE_P) && (uvpt[i]&PTE_P))
 			duppage(envid, i);
 	sys_page_alloc(envid, (void*)(UXSTACKTOP-PGSIZE), PTE_P|PTE_U|PTE_W);
 	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);

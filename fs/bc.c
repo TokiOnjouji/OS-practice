@@ -48,6 +48,12 @@ bc_pgfault(struct UTrapframe *utf)
 	// the disk.
 	//
 	// LAB 5: you code here:
+	addr = ROUNDDOWN(addr, PGSIZE);
+	if((r = sys_page_alloc(0, addr, PTE_SYSCALL)) < 0)
+		panic("in bc_pgfault, page_alloc fault");
+	if((r = ide_read(blockno*(4096/512), addr, (4096/512))) < 0)
+		panic("in bc_pgfault, ide_read fault");
+	
 
 	// Clear the dirty bit for the disk block page since we just read the
 	// block from disk
@@ -77,6 +83,15 @@ flush_block(void *addr)
 		panic("flush_block of bad va %08x", addr);
 
 	// LAB 5: Your code here.
+	addr = ROUNDDOWN(addr, PGSIZE);
+	if(va_is_mapped(addr) && va_is_dirty(addr)) {
+		int r;
+		if ((r = ide_write(blockno*(4096/512), addr, (4096/512))) < 0)
+			panic("in flush_block, ide_write fault");
+		if ((r = sys_page_map(0, addr, 0, addr, PTE_SYSCALL)) < 0)
+			panic("in flush_block, sys_page_map: %e", r);
+	}
+	return;
 	panic("flush_block not implemented");
 }
 

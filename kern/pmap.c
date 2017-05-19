@@ -501,7 +501,7 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 void
 page_remove(pde_t *pgdir, void *va)
 {
-	pte_t *tmp_pte;
+	pte_t *tmp_pte=NULL;
 	struct PageInfo* tmp_page=page_lookup(pgdir,va,&tmp_pte);
 	if(tmp_page)
 		page_decref(tmp_page);

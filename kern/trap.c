@@ -168,7 +168,7 @@ trap_init_percpu(void)
 	int i = cpunum();
 	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP-i*(KSTKSIZE+KSTKGAP);
 	thiscpu->cpu_ts.ts_ss0 = GD_KD;
-	//thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate);
+	thiscpu->cpu_ts.ts_iomb = sizeof(struct Taskstate);
 
 	gdt[(GD_TSS0 >> 3) + i] = SEG16(STS_T32A, (uint32_t) (&thiscpu->cpu_ts),
 					sizeof(struct Taskstate) - 1, 0);
@@ -266,6 +266,14 @@ trap_dispatch(struct Trapframe *tf)
 
 	// Handle keyboard and serial interrupts.
 	// LAB 5: Your code here.
+	if(tf->tf_trapno == IRQ_OFFSET+IRQ_KBD) {
+		kbd_intr();
+		return;	
+	}
+	if(tf->tf_trapno == IRQ_OFFSET+IRQ_SERIAL) {
+		serial_intr();
+		return;	
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);

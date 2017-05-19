@@ -133,6 +133,7 @@ devfile_read(struct Fd *fd, void *buf, size_t n)
 // Returns:
 //	 The number of bytes successfully written.
 //	 < 0 on error.
+#define min(x,y) (((x)<(y))?(x):(y))
 static ssize_t
 devfile_write(struct Fd *fd, const void *buf, size_t n)
 {
@@ -141,7 +142,22 @@ devfile_write(struct Fd *fd, const void *buf, size_t n)
 	// remember that write is always allowed to write *fewer*
 	// bytes than requested.
 	// LAB 5: Your code here
-	panic("devfile_write not implemented");
+	int r;
+	int len = 0;
+	int bufsize = PGSIZE - (sizeof(int) + sizeof(size_t));
+	//while(n > 0) {
+		int sendsize = min(n, bufsize);
+		fsipcbuf.write.req_fileid = fd->fd_file.id;
+		fsipcbuf.write.req_n = sendsize;
+		memmove(fsipcbuf.write.req_buf, buf+len, sendsize);
+		
+		if ((r = fsipc(FSREQ_WRITE, NULL)) < 0)
+			return r;
+		
+		len += r;
+		n -= r;
+	//}
+	return len;
 }
 
 static int
