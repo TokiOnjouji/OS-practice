@@ -56,10 +56,10 @@ sys_env_destroy(envid_t envid)
 
 	if ((r = envid2env(envid, &e, 1)) < 0)
 		return r;
-	if (e == curenv)
+	/*if (e == curenv)
 		cprintf("[%08x] exiting gracefully\n", curenv->env_id);
 	else
-		cprintf("[%08x] destroying %08x\n", curenv->env_id, e->env_id);
+		cprintf("[%08x] destroying %08x\n", curenv->env_id, e->env_id);*/
 	env_destroy(e);
 	return 0;
 }
@@ -321,15 +321,18 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 			return -E_INVAL;
 		if((perm&PTE_W) && !(*pte&PTE_W))
 			return -E_INVAL;
-		if (page_insert(e->env_pgdir,p,e->env_ipc_dstva,perm) < 0)
-			return -E_NO_MEM;
-		e->env_ipc_perm = perm;
+		if((uintptr_t)e->env_ipc_dstva < UTOP) {
+			if (page_insert(e->env_pgdir,p,e->env_ipc_dstva,perm) < 0)
+				return -E_NO_MEM;
+			e->env_ipc_perm = perm;
+		} else e->env_ipc_perm = 0;
+		e->env_ipc_perm = 0;
 	}
 	e->env_ipc_recving = 0;
 	e->env_ipc_from = curenv->env_id;
 	e->env_ipc_value = value;
 	e->env_status = ENV_RUNNABLE;
-	curenv->env_tf.tf_regs.reg_eax = 0;
+	e->env_tf.tf_regs.reg_eax = 0;
 	return 0;
 }
 
@@ -354,6 +357,7 @@ sys_ipc_recv(void *dstva)
 	curenv->env_ipc_recving = 1;
 	curenv->env_ipc_dstva = dstva;
 	curenv->env_status = ENV_NOT_RUNNABLE;
+	sched_yield();
 	return 0;
 }
 
