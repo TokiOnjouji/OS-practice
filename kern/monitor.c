@@ -7,6 +7,7 @@
 #include <inc/assert.h>
 #include <inc/x86.h>
 
+#include <kern/pmap.h>
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
@@ -25,7 +26,11 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "", mon_backtrace},
-	{ "color", "", set_color}
+	{ "color", "", set_color},
+	{ "showmappings", "", mon_showmappings},
+	{ "setpermissions", "", mon_changepermissions},
+	{ "clearpermissions", "", mon_changepermissions},
+	{ "dumpmemory", "", mon_dumpmemory}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -91,7 +96,143 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+bool AddrToNum(char *str, unsigned int *res) {
+	unsigned int x = 0;
+	if(str[0] != '0' || str[1] != 'x') return 0;
+	str = str + 2;
+	for(int i = 0; str[i]; i++) {
+		if(i >= 8) return 0;
+		x = x*16;
+		if('0'<=str[i]&&str[i]<='9')
+			x += str[i]-'0';
+		else if('A'<=str[i]&&str[i]<='F')
+			x += str[i]-'A'+10;
+		else if('a'<=str[i]&&str[i]<='f')
+			x += str[i]-'a'+10;
+		else
+			return 0;
+	}
+	*res = x;
+	return 1;
+}
 
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	if(argc != 3) {
+		cprintf("Usage: showmappings <start_addr> <end_addr>\n");
+		cprintf("e.g.,  showmappings 0x3000 0x5000\n");
+		return 0;
+	}
+	unsigned int down, up;
+	if(!AddrToNum(argv[1], &down) || !AddrToNum(argv[2], &up)) {
+		cprintf("Invalid virtual address, it should be a 32-bit hexadecimal number\n");
+		return 0;
+	}
+	for(void* i = (void*)down; i <= (void*)up; i+=PGSIZE) {
+		pte_t* pte = pgdir_walk(kern_pgdir, i, 0);
+		if(!pte) cprintf("no mapping at 0x%x\n", ROUNDDOWN(i, PGSIZE));
+		else {
+			if((*pte)&PTE_P) {
+				cprintf("VA 0x%x----PA 0x%x:", i, PTE_ADDR(*pte));
+				if((*pte)&PTE_W) cprintf(" PTE_W");
+				if((*pte)&PTE_U) cprintf(" PTE_U");
+				cprintf("\n");
+			}
+			else {
+				cprintf("no mapping at 0x%x\n", ROUNDDOWN(i, PGSIZE));
+			}		
+		}
+	}
+	return 0;
+}
+
+int
+mon_changepermissions(int argc, char **argv, struct Trapframe *tf)
+{
+	if(argc != 3) {
+		cprintf("Usage: <setpermissions/clearpermissions/changepermissions> <v_addr> <perm>");
+		return 0;
+	}
+	if(strcmp(argv[0], "setpermissions") && strcmp(argv[0], "clearpermissions")) {
+		cprintf("Usage: <setpermissions/clearpermissions/changepermissions> <v_addr> <perm>");
+		return 0;	
+	}
+	unsigned int va;
+	if(!AddrToNum(argv[1], &va)) {
+		cprintf("Invalid virtual address, it should be a 32-bit hexadecimal number\n");
+		return 0;
+	}
+	int perm = 0;
+	if(!strcmp(argv[2], "PTE_W")) {
+		perm = PTE_W;
+	}
+	else if(!strcmp(argv[2], "PTE_U")) {
+		perm = PTE_U;
+	}
+	else if(!strcmp(argv[2], "PTE_P")){
+		perm = PTE_P;
+	}
+	else {
+		cprintf("Invalid permmision, it should be PTE_P, PTE_U or PTE_W\n");
+		return 0;	
+	}
+	pte_t* pte = pgdir_walk(kern_pgdir, (void*)va, 0);
+	if(!pte) {
+		cprintf("no mapping at 0x%x\n", va);
+		return 0;
+	}
+	else {
+		if((*pte)&PTE_P) {
+			if(!strcmp(argv[0], "setpermissions")) (*pte) |= perm;
+			else (*pte) &= ~perm;
+			cprintf("VA 0x%x----PA 0x%x:", va, PTE_ADDR(*pte));
+			if((*pte)&PTE_P) cprintf(" PTE_P");
+ 			if((*pte)&PTE_W) cprintf(" PTE_W");
+			if((*pte)&PTE_U) cprintf(" PTE_U");
+			cprintf("\n");
+		}
+		else {
+			cprintf("no mapping at 0x%x\n", va);
+			return 0;
+		}
+	}
+	return 0;
+}
+
+int
+mon_dumpmemory(int argc, char **argv, struct Trapframe *tf) {
+	if(argc != 4) {
+		cprintf("Usage: dumpmemory <VA/PA> <start_addr> <end_addr>\n");
+		return 0;	
+	}
+	if(strcmp(argv[1], "VA") && strcmp(argv[1], "PA")) {
+		cprintf("Usage: dumpmemory <VA/PA> <start_addr> <end_addr>\n");
+		return 0;	
+	}
+	unsigned int down, up;
+	if(!AddrToNum(argv[2], &down) || !AddrToNum(argv[3], &up)) {
+		cprintf("Invalid virtual address, it should be a 32-bit hexadecimal number\n");
+		return 0;
+	}
+	for(unsigned int* i = (unsigned int*)down; i <= (unsigned int*)up; i++) {
+		void* va = (void*)i;
+		if(strcmp(argv[1], "VA")) {
+			va = va + KERNBASE;
+		}
+		pte_t* pte = pgdir_walk(kern_pgdir, va, 0);
+		if((!pte) || (!((*pte)&PTE_P)))
+			cprintf("no mapping at 0x%x\n", va);
+		else {
+			if(!strcmp(argv[1], "VA"))
+				cprintf("vaddr 0x%x: 0x%x\n", va, *((int*)va));
+			else
+				cprintf("paddr 0x%x: 0x%x\n", i, *((int*)va));
+		}
+	}
+	return 0;
+	
+}
 
 /***** Kernel monitor command interpreter *****/
 
