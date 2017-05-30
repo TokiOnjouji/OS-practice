@@ -2,6 +2,13 @@
 #include "fs.h"
 
 // Return the virtual address of this disk block.
+
+
+#define MAXBLOCKN 10
+
+int CacheBuf[MAXBLOCKN] __attribute__((aligned(PGSIZE)));
+int CacheCnt;
+
 void*
 diskaddr(uint32_t blockno)
 {
@@ -24,8 +31,42 @@ va_is_dirty(void *va)
 	return (uvpt[PGNUM(va)] & PTE_D) != 0;
 }
 
+bool
+va_is_accessed(void *va)
+{
+	return (uvpt[PGNUM(va)] & PTE_A) != 0;
+}
+
 // Fault any disk block that is read in to memory by
 // loading it from disk.
+void eviction() {
+	for(int i = CacheCnt - 1; i >= 0; i--) {
+		void* addr = diskaddr(CacheBuf[i]);
+		if(!va_is_accessed(addr)) {
+			if(va_is_dirty(addr)) {
+				flush_block(addr);			
+			}
+			sys_page_unmap(0, addr);
+
+			int tmp = CacheBuf[CacheCnt - 1];
+			CacheBuf[CacheCnt - 1] = CacheBuf[i];
+			CacheBuf[i] = tmp;
+			CacheCnt --;
+		}
+		else {
+			sys_page_map(0, addr, 0, addr, uvpt[PGNUM(addr)]&(0xFFF^PTE_A));
+		}
+	}
+	while(CacheCnt >= MAXBLOCKN/2) {
+		void* addr = diskaddr(CacheBuf[CacheCnt-1]);
+		CacheCnt = CacheCnt - 1;
+		if(va_is_dirty(addr)) {
+			flush_block(addr);			
+		}
+		sys_page_unmap(0, addr);
+	}
+}
+
 static void
 bc_pgfault(struct UTrapframe *utf)
 {
@@ -41,6 +82,10 @@ bc_pgfault(struct UTrapframe *utf)
 	// Sanity check the block number.
 	if (super && blockno >= super->s_nblocks)
 		panic("reading non-existent block %08x\n", blockno);
+	
+	if(CacheCnt == MAXBLOCKN) {
+		eviction();	
+	}
 
 	// Allocate a page in the disk map region, read the contents
 	// of the block from the disk into that page.
@@ -65,6 +110,9 @@ bc_pgfault(struct UTrapframe *utf)
 	// in?)
 	if (bitmap && block_is_free(blockno))
 		panic("reading free block %08x\n", blockno);
+	
+	//cache insert
+	CacheBuf[CacheCnt++] = blockno;
 }
 
 // Flush the contents of the block containing VA out to disk if
@@ -132,7 +180,13 @@ bc_init(void)
 	set_pgfault_handler(bc_pgfault);
 	check_bc();
 
+	memset(CacheBuf, 0, sizeof(CacheBuf));
+
 	// cache the super block by reading it once
 	memmove(&super, diskaddr(1), sizeof super);
+	
+	CacheCnt = 0;
 }
+
+
 
