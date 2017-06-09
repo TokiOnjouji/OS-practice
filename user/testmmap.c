@@ -12,7 +12,7 @@ umain(int argc, char **argv)
 		return;
 	}
 	cprintf("In file newmotd: %s\n", buf);
-	buf[0] = 'T';
+	buf[0] = 'F';
 	close(fd);
 	fd = open("/newmotd", O_RDONLY);
 	char ch;
