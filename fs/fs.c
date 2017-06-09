@@ -499,3 +499,19 @@ fs_sync(void)
 		flush_block(diskaddr(i));
 }
 
+int
+file_mmap(envid_t envid, void* va, size_t length, struct File *f, off_t offset, int perm)
+{
+	int r;
+	for(size_t i = 0; i < length; i += PGSIZE) {
+		char *blk;
+		file_get_block(f, (i+offset)/BLKSIZE, &blk);
+
+		char x = *(blk);
+		cprintf("%d %x %d %x\n",ENVX(sys_getenvid()), blk,ENVX(envid), va+i);
+		if((r=sys_page_map(0, blk, envid, va+i, perm|PTE_U|PTE_P)) < 0)
+			return r;
+	}
+	return 0;
+}
+

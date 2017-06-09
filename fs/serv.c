@@ -293,6 +293,18 @@ serve_sync(envid_t envid, union Fsipc *req)
 	return 0;
 }
 
+int
+serve_mmap(envid_t envid, struct Fsreq_mmap *req)
+{
+	struct OpenFile *o;
+	int r;
+	if ((r = openfile_lookup(envid, req->req_fileid, &o)) < 0)
+		return r;
+	if(req->req_envid)
+		envid = req->req_envid;
+	return file_mmap(envid, req->req_va, req->req_length, o->o_file, req->req_offset, req->req_perm);
+}
+
 typedef int (*fshandler)(envid_t envid, union Fsipc *req);
 
 fshandler handlers[] = {
@@ -303,7 +315,8 @@ fshandler handlers[] = {
 	[FSREQ_FLUSH] =		(fshandler)serve_flush,
 	[FSREQ_WRITE] =		(fshandler)serve_write,
 	[FSREQ_SET_SIZE] =	(fshandler)serve_set_size,
-	[FSREQ_SYNC] =		serve_sync
+	[FSREQ_SYNC] =		serve_sync,
+	[FSREQ_MMAP]=		(fshandler)serve_mmap
 };
 
 void

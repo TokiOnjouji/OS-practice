@@ -89,6 +89,7 @@ ssize_t	readn(int fd, void *buf, size_t nbytes);
 int	dup(int oldfd, int newfd);
 int	fstat(int fd, struct Stat *statbuf);
 int	stat(const char *path, struct Stat *statbuf);
+int 	mmap(envid_t envid, void* va, size_t length, int fd, off_t offset, int perm);
 
 // file.c
 int	open(const char *path, int mode);

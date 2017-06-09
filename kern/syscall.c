@@ -237,7 +237,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 
 	// LAB 4: Your code here.
 	struct Env *se, *de;
-	if(envid2env(srcenvid, &se, 1) < 0 || envid2env(dstenvid, &de, 1) < 0)
+	if(envid2env(srcenvid, &se, 1) < 0 || envid2env(dstenvid, &de, 0) < 0)
 		return -E_BAD_ENV;
 	if((uintptr_t)srcva >= UTOP || 
 		(uintptr_t)dstva >= UTOP || 
@@ -349,7 +349,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 	e->env_ipc_from = curenv->env_id;
 	e->env_ipc_value = value;
 	e->env_status = ENV_RUNNABLE;
-	curenv->env_tf.tf_regs.reg_eax = 0;
+	e->env_tf.tf_regs.reg_eax = 0;
 	return 0;
 }
 
@@ -374,7 +374,8 @@ sys_ipc_recv(void *dstva)
 	curenv->env_ipc_recving = 1;
 	curenv->env_ipc_dstva = dstva;
 	curenv->env_status = ENV_NOT_RUNNABLE;
-	return 0;
+	sched_yield();
+	//return 0;
 }
 
 

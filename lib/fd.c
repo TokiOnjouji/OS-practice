@@ -269,6 +269,29 @@ seek(int fdnum, off_t offset)
 }
 
 int
+mmap(envid_t envid, void* va, size_t length, int fdnum, off_t offset, int perm)
+{
+	int r;
+	struct Dev *dev;
+	struct Fd *fd;
+
+	if ((r = fd_lookup(fdnum, &fd)) < 0
+	    || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0)
+		return r;
+	
+	if (((unsigned int)va%PGSIZE) || (offset%PGSIZE))
+		return -E_INVAL;
+
+	if (!dev->dev_mmap)
+		return -E_NOT_SUPP;
+
+	if(perm != PTE_W && perm != 0)
+		return -E_INVAL;
+
+	return (*dev->dev_mmap)(envid, va, length, fd, offset, perm);
+}
+
+int
 ftruncate(int fdnum, off_t newsize)
 {
 	int r;

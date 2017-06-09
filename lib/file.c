@@ -33,6 +33,7 @@ static ssize_t devfile_read(struct Fd *fd, void *buf, size_t n);
 static ssize_t devfile_write(struct Fd *fd, const void *buf, size_t n);
 static int devfile_stat(struct Fd *fd, struct Stat *stat);
 static int devfile_trunc(struct Fd *fd, off_t newsize);
+static int devfile_mmap(envid_t envid, void* va, size_t length, struct Fd *fd, off_t offset, int perm);
 
 struct Dev devfile =
 {
@@ -42,7 +43,8 @@ struct Dev devfile =
 	.dev_close =	devfile_flush,
 	.dev_stat =	devfile_stat,
 	.dev_write =	devfile_write,
-	.dev_trunc =	devfile_trunc
+	.dev_trunc =	devfile_trunc,
+	.dev_mmap = 	devfile_mmap
 };
 
 // Open a file (or directory).
@@ -181,6 +183,18 @@ devfile_trunc(struct Fd *fd, off_t newsize)
 	fsipcbuf.set_size.req_fileid = fd->fd_file.id;
 	fsipcbuf.set_size.req_size = newsize;
 	return fsipc(FSREQ_SET_SIZE, NULL);
+}
+
+static int
+devfile_mmap(envid_t envid, void* va, size_t length, struct Fd *fd, off_t offset, int perm)
+{
+	fsipcbuf.mmap.req_envid = envid;
+	fsipcbuf.mmap.req_va = va;
+	fsipcbuf.mmap.req_length = length;
+	fsipcbuf.mmap.req_fileid = fd->fd_file.id;
+	fsipcbuf.mmap.req_offset = offset;
+	fsipcbuf.mmap.req_perm = perm;
+	return fsipc(FSREQ_MMAP, NULL);
 }
 
 

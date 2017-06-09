@@ -5,6 +5,7 @@
 
 #include <inc/types.h>
 #include <inc/mmu.h>
+#include <inc/env.h>
 
 // File nodes (both in-memory and on-disk)
 
@@ -70,7 +71,8 @@ enum {
 	FSREQ_STAT,
 	FSREQ_FLUSH,
 	FSREQ_REMOVE,
-	FSREQ_SYNC
+	FSREQ_SYNC,
+	FSREQ_MMAP
 };
 
 union Fsipc {
@@ -108,7 +110,14 @@ union Fsipc {
 	struct Fsreq_remove {
 		char req_path[MAXPATHLEN];
 	} remove;
-
+	struct Fsreq_mmap {
+		envid_t req_envid;
+		void* req_va;
+		int req_fileid;
+		size_t req_length;
+		off_t req_offset;
+		int req_perm;
+	} mmap;
 	// Ensure Fsipc is one page
 	char _pad[PGSIZE];
 };
